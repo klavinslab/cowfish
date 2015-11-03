@@ -1,2 +1,2 @@
-# aqua-cyto-process
-Aquarium cytometry results analyzing software
+# Cowfish
+Cowfish is an Aquarium cytometry results analyzing software package written in Python.
