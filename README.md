@@ -28,7 +28,7 @@ co = Cowfish("http://54.68.9.194:81/api", "yang", "Xqebo0lhbQ_grN8l9ZlEF1rC_bDIs
 
 An example:
 ```
-df_singlets = co.cytometry_results_summary([job_id_1,job_id_2,job_id_3],ploidy="haploid", only='singlets')
+df_singlets = co.cytometry_results_summary([job_id_1,job_id_2,job_id_3], ploidy="haploid", only='singlets')
 ```
 This will process the cytometry results in job_id_1, job_id_2, and job_id_3, pass through yeast haploid and singlets gate and return a [Pandas](http://pandas.pydata.org/) dataframe (a table like data structure but much more powerful thanks to Pandas) that summarizing all the results with time, sample_name, fluorescence value, concentration.
 
