@@ -62,7 +62,8 @@ class Cowfish(object):
         return samples
 
     # return pandas dataframe from FCMeasurement object
-    def sample_summary(self, sample, channel):
+    # first_sample_time is to record the first sample time in the job
+    def sample_summary(self, sample, channel, first_sample_time):
         data = sample.data
         fl_mean = data[channel].mean()
         fl_median = data[channel].median()
@@ -72,6 +73,8 @@ class Cowfish(object):
         conc = events/vol
         atime = int(sample.meta['#ACQUISITIONTIMEMILLI'])/1000.0
         time_index = pd.DatetimeIndex([sample.meta['$DATE'] + ' ' + sample.meta['$BTIM'][0:-3]], dtype='datetime64[ns]')
+        if int(sample.meta['$BTIM'][0:2]) < int(first_sample_time[0:2]):
+            time_index = time_index + + pd.DateOffset(1)
         well_name = sample.meta['$FIL'][0:-4]
         df = pd.DataFrame({ 'fl_mean': fl_mean,
                             'fl_median': fl_median,
@@ -114,9 +117,11 @@ class Cowfish(object):
 
     def gated_samples_summary(self, samples, gate, channel):
         df = pd.DataFrame()
+        first_sample_time = samples[0].meta['$BTIM'][0:-3]]
         for sample in samples:
             gated_sample = sample.gate(gate)
-            df = df.append(self.sample_summary(gated_sample, channel))
+            df = df.append(self.sample_summary(gated_sample, channel, first_sample_time))
+        print first_sample_time
         return df
 
     def sample_ids(self, sample_names):
