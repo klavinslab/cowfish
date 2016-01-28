@@ -6,7 +6,7 @@ Cowfish is an Aquarium cytometry results analyzing software package written in P
 ```
 git clone https://github.com/klavinslab/cowfish.git
 cd cowfish
-pip install .
+sudo pip install .
 ```
 
 ## How to use

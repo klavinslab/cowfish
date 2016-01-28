@@ -4,6 +4,7 @@ import pandas as pd
 from FlowCytometryTools import FCMeasurement
 from FlowCytometryTools import ThresholdGate, PolyGate
 import os
+import urllib
 
 # Goal is to create an Aquarium cytometry results processing package
 # Cowfish is to provide a collection of useful methods for processing Aquarium cytometry results
@@ -24,10 +25,22 @@ class Cowfish(object):
         job = api.find('job', { "id": job_id })
         return job
 
-    # unzip downloaded data file in directory_path and return unzipped file datadir
+    def download_from(self, job, zipfile_path):
+        """Download cytometry results zip file from job"""
+        api = AquariumAPI(self.url, self.login, self.key)
+        file_id = job['rows'][0]['backtrace'][-1]['rval']['io_hash']['results'][0]['id']
+        file_url = api.find('url_for_upload', {'id': file_id})['rows'][0]
+        file_url = api.url.strip('/api') + file_url
+        urllib.urlretrieve(file_url, zipfile_path)
+
     def datadir_from(self, job):
+        """Unzip downloaded data file in directory_path and return unzipped file datadir"""
         file_name = job['rows'][0]['backtrace'][-5]['content'][-1]['upload']['var']
-        with zipfile.ZipFile(self.directory_path + file_name + '.zip', "r") as z:
+        zipfile_path = self.directory_path + file_name + '.zip'
+        unzipfile_path = self.directory_path + file_name
+        if not os.path.exists(zipfile_path):
+            self.download_from(job, zipfile_path)
+        with zipfile.ZipFile(zipfile_path, "r") as z:
             z.extractall(self.directory_path)
         file_path = z.infolist()[0].filename.split('/')[0]
         datadir = self.directory_path + file_path
@@ -46,7 +59,7 @@ class Cowfish(object):
 
     # return inducer_additions from job log
     def inducer_additions_from(self, job):
-        inducer_additions = None
+        inducer_additions = [None]
         if 'inducer_additions' in  job['rows'][0]['backtrace'][0]['arguments']['io_hash']:
             inducer_additions = job['rows'][0]['backtrace'][0]['arguments']['io_hash']['inducer_additions']
         return inducer_additions
@@ -63,7 +76,7 @@ class Cowfish(object):
 
     # return pandas dataframe from FCMeasurement object
     # first_sample_time is to record the first sample time in the job
-    def sample_summary(self, sample, channel, first_sample_time):
+    def sample_summary(self, sample, channel, first_sample_date_time):
         data = sample.data
         fl_mean = data[channel].mean()
         fl_median = data[channel].median()
@@ -73,8 +86,8 @@ class Cowfish(object):
         conc = events/vol
         atime = int(sample.meta['#ACQUISITIONTIMEMILLI'])/1000.0
         time_index = pd.DatetimeIndex([sample.meta['$DATE'] + ' ' + sample.meta['$BTIM'][0:-3]], dtype='datetime64[ns]')
-        if int(sample.meta['$BTIM'][0:2]) < int(first_sample_time[0:2]):
-            time_index = time_index + + pd.DateOffset(1)
+        if time_index < first_sample_date_time:
+            time_index = time_index + pd.DateOffset(1)
         well_name = sample.meta['$FIL'][0:-4]
         df = pd.DataFrame({ 'fl_mean': fl_mean,
                             'fl_median': fl_median,
@@ -117,11 +130,10 @@ class Cowfish(object):
 
     def gated_samples_summary(self, samples, gate, channel):
         df = pd.DataFrame()
-        first_sample_time = samples[0].meta['$BTIM'][0:-3]]
+        first_sample_date_time = pd.DatetimeIndex([samples[0].meta['$DATE'] + ' ' + samples[0].meta['$BTIM'][0:-3]], dtype='datetime64[ns]')
         for sample in samples:
             gated_sample = sample.gate(gate)
-            df = df.append(self.sample_summary(gated_sample, channel, first_sample_time))
-        print first_sample_time
+            df = df.append(self.sample_summary(gated_sample, channel, first_sample_date_time))
         return df
 
     def sample_ids(self, sample_names):
@@ -153,6 +165,8 @@ class Cowfish(object):
         samples = self.samples_from(self.datadir_from(job))
         df = self.gated_samples_summary(samples, gate, channel)
         df['sample_name'] = pd.Series(self.short_names(sample_names), index=df.index)
+        if len(inducer_additions) < len(samples):
+            inducer_additions += [None] * (len(samples) - len(inducer_additions))
         if inducer_additions == None:
             inducer_additions = [None] * df.shape[0]
         try:
