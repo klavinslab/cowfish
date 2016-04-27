@@ -41,9 +41,10 @@ class Cowfish(object):
         if not os.path.exists(zipfile_path):
             self.download_from(job, zipfile_path)
         with zipfile.ZipFile(zipfile_path, "r") as z:
-            z.extractall(self.directory_path)
-        file_path = z.infolist()[0].filename.split('/')[0]
-        datadir = self.directory_path + file_path
+            file_path = z.infolist()[0].filename.split('/')[0]
+            datadir = self.directory_path + file_path
+            if not os.path.exists(datadir):
+                z.extractall(self.directory_path)
         return datadir
 
     # return sample_names parsed from job log
@@ -165,14 +166,20 @@ class Cowfish(object):
         samples = self.samples_from(self.datadir_from(job))
         df = self.gated_samples_summary(samples, gate, channel)
         df['sample_name'] = pd.Series(self.short_names(sample_names), index=df.index)
-        if len(inducer_additions) < len(samples):
-            inducer_additions += [None] * (len(samples) - len(inducer_additions))
         if inducer_additions == None:
-            inducer_additions = [None] * df.shape[0]
+            inducer_additions = ["None"] * df.shape[0]
+        if len(inducer_additions) < len(samples):
+            inducer_additions += ["None"] * (len(samples) - len(inducer_additions))
+        elif len(inducer_additions) > len(samples):
+            inducer_additions = inducer_additions[0:len(samples)]
+        
+        # strip white characters in the beginning and end.
+        inducer_additions = map(lambda it: it.strip(), inducer_additions)
+        
         try:
             df['treatment'] = pd.Series(inducer_additions, index=df.index)
         except ValueError:
-            print 'valueError'
+            print 'valueError, something is wrong in assigning treatment data.'
         df['job_id'] = pd.Series([job_id] * df.shape[0], index=df.index)
         df['sample_id'] = pd.Series(self.sample_ids(sample_names), index=df.index)
         return df
