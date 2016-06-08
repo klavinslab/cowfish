@@ -18,14 +18,6 @@ from cowfish import Cowfish
 co = Cowfish(aquarium_url/api, aquarium_login, aquarium_api_key, local_folder_path_to_store_downloads)
 ```
 
-An example of initialization is as follows:
-
-```
-from cowfish import Cowfish
-co = Cowfish("http://aquarium_url/api", "user_name", 'your_api_key',r'/path/to/your_folder')
-
-```
-
 ## Aquarium cytometry job data summary
 
 An example:
