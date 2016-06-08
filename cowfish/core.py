@@ -127,6 +127,7 @@ class Cowfish(object):
                 yeast_app_gate = yeast_gate & diploid_doublet_gate
             else:
                 print "only needs to be singlets or doublets or None"
+        # fl1A_gate = ThresholdGate(1, 'FL1-A', region='above')
         return yeast_app_gate
 
     def gated_samples_summary(self, samples, gate, channel):
@@ -136,6 +137,13 @@ class Cowfish(object):
             gated_sample = sample.gate(gate)
             df = df.append(self.sample_summary(gated_sample, channel, first_sample_date_time))
         return df
+
+    def gated_samples(self, samples, gate):
+        new_samples = []
+        for sample in samples:
+            gated_sample = sample.gate(gate)
+            new_samples.append(gated_sample)
+        return new_samples
 
     def sample_ids(self, sample_names):
         api = AquariumAPI(self.url, self.login, self.key)
