@@ -21,7 +21,9 @@ co = Cowfish(aquarium_url/api, aquarium_login, aquarium_api_key, local_folder_pa
 An example of initialization is as follows:
 
 ```
-co = Cowfish("http://54.68.9.194:81/api", "yang", "Xqebo0lhbQ_grN8l9ZlEF1rC_bDIsyqfh74pOgwcNzQ",r'/Users/yaoyu/Dropbox/Yaoyu_SOSLab_Research/Aquarium_cytometry/')
+from cowfish import Cowfish
+co = Cowfish("http://aquarium_url/api", "user_name", 'your_api_key',r'/path/to/your_folder')
+
 ```
 
 ## Aquarium cytometry job data summary
