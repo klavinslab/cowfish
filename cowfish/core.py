@@ -6,8 +6,7 @@ from FlowCytometryTools import ThresholdGate, PolyGate
 import os
 import urllib
 
-# Goal is to create an Aquarium cytometry results processing package
-# Cowfish is to provide a collection of useful methods for processing Aquarium cytometry results
+# Cowfish provides a collection of useful methods for processing Aquarium cytometry results
 
 class Cowfish(object):
     def __init__(self, url, login, key, directory_path):
@@ -15,10 +14,42 @@ class Cowfish(object):
         self.login = login
         self.key = key
         self.directory_path = directory_path
-
-    # return pandas dataframe for job_ids
-    # def summary(job_ids, ploidy=None, only=None, channel="FL1-A"):
-
+        
+    # return processed pandas dataframe for a list of job_ids with fluorescence data from FL1-A channel in the cytometry data file
+    def cytometry_results_summary(self, job_ids, ploidy=None, only=None, channel="FL1-A"):
+        yeast_app_gate = self.gate(ploidy=ploidy, only=only)
+        df = pd.DataFrame()
+        for job_id in job_ids:
+            df = df.append(self.cytometry_results(job_id, yeast_app_gate, channel))
+        df['time'] = (df.index - df.index.min()).astype('timedelta64[s]')/3600.0
+        return df.sort_index()
+        
+    # a method to return pandas dataframe from job_id data with gate and channel
+    def cytometry_results(self, job_id, gate, channel):
+        job = self.get_job_log(job_id)
+        sample_names = self.sample_names_from(job)
+        inducer_additions = self.inducer_additions_from(job)
+        samples = self.samples_from(self.datadir_from(job))
+        df = self.gated_samples_summary(samples, gate, channel)
+        df['sample_name'] = pd.Series(self.short_names(sample_names), index=df.index)
+        if inducer_additions == None:
+            inducer_additions = ["None"] * df.shape[0]
+        if len(inducer_additions) < len(samples):
+            inducer_additions += ["None"] * (len(samples) - len(inducer_additions))
+        elif len(inducer_additions) > len(samples):
+            inducer_additions = inducer_additions[0:len(samples)]
+        
+        # strip white characters in the beginning and end.
+        inducer_additions = map(lambda it: it.strip(), inducer_additions)
+        
+        try:
+            df['treatment'] = pd.Series(inducer_additions, index=df.index)
+        except ValueError:
+            print 'valueError, something is wrong in assigning treatment data.'
+        df['job_id'] = pd.Series([job_id] * df.shape[0], index=df.index)
+        df['sample_id'] = pd.Series(self.sample_ids(sample_names), index=df.index)
+        return df
+        
     # return job log as job for job_id
     def get_job_log(self, job_id):
         api = AquariumAPI(self.url, self.login, self.key)
@@ -165,38 +196,3 @@ class Cowfish(object):
             else:
                 short_names.append(sample_name)
         return short_names
-
-    # a method to return pandas dataframe from job_id data with gate and channel
-    def cytometry_results(self, job_id, gate, channel):
-        job = self.get_job_log(job_id)
-        sample_names = self.sample_names_from(job)
-        inducer_additions = self.inducer_additions_from(job)
-        samples = self.samples_from(self.datadir_from(job))
-        df = self.gated_samples_summary(samples, gate, channel)
-        df['sample_name'] = pd.Series(self.short_names(sample_names), index=df.index)
-        if inducer_additions == None:
-            inducer_additions = ["None"] * df.shape[0]
-        if len(inducer_additions) < len(samples):
-            inducer_additions += ["None"] * (len(samples) - len(inducer_additions))
-        elif len(inducer_additions) > len(samples):
-            inducer_additions = inducer_additions[0:len(samples)]
-        
-        # strip white characters in the beginning and end.
-        inducer_additions = map(lambda it: it.strip(), inducer_additions)
-        
-        try:
-            df['treatment'] = pd.Series(inducer_additions, index=df.index)
-        except ValueError:
-            print 'valueError, something is wrong in assigning treatment data.'
-        df['job_id'] = pd.Series([job_id] * df.shape[0], index=df.index)
-        df['sample_id'] = pd.Series(self.sample_ids(sample_names), index=df.index)
-        return df
-
-    # return data frame for a list of job_ids
-    def cytometry_results_summary(self, job_ids, ploidy=None, only=None, channel="FL1-A"):
-        yeast_app_gate = self.gate(ploidy=ploidy, only=only)
-        df = pd.DataFrame()
-        for job_id in job_ids:
-            df = df.append(self.cytometry_results(job_id, yeast_app_gate, channel))
-        df['time'] = (df.index - df.index.min()).astype('timedelta64[s]')/3600.0
-        return df.sort_index()
