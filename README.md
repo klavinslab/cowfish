@@ -15,7 +15,7 @@ sudo pip install .
 
 ```
 from cowfish import Cowfish
-co = Cowfish(aquarium_url/api, aquarium_login, aquarium_api_key, local_folder_path_to_store_downloads)
+co = Cowfish(login, password, aquarium_url, local_folder_path_to_store_downloads)
 ```
 
 ## Aquarium cytometry job data summary

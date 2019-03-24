@@ -10,7 +10,7 @@ config = {
     'download_url': 'https://github.com/klavinslab/cowfish.git',
     'author_email': 'yaoyu _at_ uw.edu',
     'version': '0.0.5',
-    'install_requires': ['FlowCytometryTools', 'aquariumapi', 'pandas'],
+    'install_requires': ['flowcytometrytools', 'pydent', 'pandas'],
     'packages': ['cowfish'],
     'scripts': [],
     'name': 'cowfish',

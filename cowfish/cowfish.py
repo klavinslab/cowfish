@@ -1,19 +1,19 @@
-from aquariumapi import AquariumAPI
+import os
+import urllib
+from pydent import AqSession
 import zipfile
 import pandas as pd
 from FlowCytometryTools import FCMeasurement
 from FlowCytometryTools import ThresholdGate, PolyGate
-import os
-import urllib
+
 
 # Cowfish provides a collection of useful methods for processing Aquarium cytometry results
 
 class Cowfish(object):
-    def __init__(self, url, login, key, directory_path):
-        self.url = url
-        self.login = login
-        self.key = key
+    def __init__(self, login, password, aquarium_url, directory_path):
+        self.aquarium_url = aquarium_url
         self.directory_path = directory_path
+        self.AqSession = AqSession(login, password, aquarium_url)
         
     # return processed pandas dataframe for a list of job_ids with fluorescence data from FL1-A channel in the cytometry data file
     def cytometry_results_summary(self, job_ids, ploidy=None, only=None, channel="FL1-A"):
@@ -23,10 +23,10 @@ class Cowfish(object):
             df = df.append(self.cytometry_results(job_id, yeast_app_gate, channel))
         df['time'] = (df.index - df.index.min()).astype('timedelta64[s]')/3600.0
         return df.sort_index()
-        
+
     # a method to return pandas dataframe from job_id data with gate and channel
     def cytometry_results(self, job_id, gate, channel):
-        job = self.get_job_log(job_id)
+        job = self.AqSession.Job.find(job_id)
         sample_names = self.sample_names_from(job)
         inducer_additions = self.inducer_additions_from(job)
         samples = self.samples_from(self.datadir_from(job))
@@ -45,46 +45,39 @@ class Cowfish(object):
         try:
             df['treatment'] = pd.Series(inducer_additions, index=df.index)
         except ValueError:
-            print 'valueError, something is wrong in assigning treatment data.'
+            print('valueError, something is wrong in assigning treatment data.')
         df['job_id'] = pd.Series([job_id] * df.shape[0], index=df.index)
         df['sample_id'] = pd.Series(self.sample_ids(sample_names), index=df.index)
         return df
-        
-    # return job log as job for job_id
+
     def get_job_log(self, job_id):
-        api = AquariumAPI(self.url, self.login, self.key)
-        job = api.find('job', { "id": job_id })
-        return job
+        return self.AqSession.Job.find(job_id)
 
     def download_from(self, job, zipfile_path):
         """Download cytometry results zip file from job"""
-        api = AquariumAPI(self.url, self.login, self.key)
-        file_id = job['rows'][0]['backtrace'][-1]['rval']['io_hash']['results'][0]['id']
-        file_url = api.find('url_for_upload', {'id': file_id})['rows'][0]
-        file_url = api.url.strip('/api') + file_url
-        urllib.urlretrieve(file_url, zipfile_path)
+        upload_id = job.state[-1]['rval']['io_hash']['results'][0]['id']
+        raise Exception("Can not download")
 
     def datadir_from(self, job):
         """Unzip downloaded data file in directory_path and return unzipped file datadir"""
-        file_name = job['rows'][0]['backtrace'][-5]['content'][-1]['upload']['var']
-        zipfile_path = self.directory_path + file_name + '.zip'
-        unzipfile_path = self.directory_path + file_name
+        file_name = job.state[-5]['content'][-1]['upload']['var']
+        zipfile_path = os.path.join(self.directory_path, f'{file_name}.zip')
         if not os.path.exists(zipfile_path):
             self.download_from(job, zipfile_path)
         with zipfile.ZipFile(zipfile_path, "r") as z:
             file_path = z.infolist()[0].filename.split('/')[0]
-            datadir = self.directory_path + file_path
+            datadir = os.path.join(self.directory_path, file_path)
             if not os.path.exists(datadir):
                 z.extractall(self.directory_path)
         return datadir
 
-    # return sample_names parsed from job log
+    # return sample_names parsed from job state
     def sample_names_from(self, job):
         sample_names = []
-        if 'transfer' in job['rows'][0]['backtrace'][7]['content'][1]:
-            content = job['rows'][0]['backtrace'][7]['content'][1]
-        elif 'transfer' in job['rows'][0]['backtrace'][9]['content'][1]:
-            content = job['rows'][0]['backtrace'][9]['content'][1]
+        if 'transfer' in job.state[7]['content'][1]:
+            content = job.state[7]['content'][1]
+        elif 'transfer' in job.state[9]['content'][1]:
+            content = job.state[9]['content'][1]
         for step in content['transfer']['routing']:
             sample_names.append(step['sample_name'])
         return sample_names
@@ -92,8 +85,8 @@ class Cowfish(object):
     # return inducer_additions from job log
     def inducer_additions_from(self, job):
         inducer_additions = [None]
-        if 'inducer_additions' in  job['rows'][0]['backtrace'][0]['arguments']['io_hash']:
-            inducer_additions = job['rows'][0]['backtrace'][0]['arguments']['io_hash']['inducer_additions']
+        if 'inducer_additions' in job.state[0]['arguments']['io_hash']:
+            inducer_additions = job.state[0]['arguments']['io_hash']['inducer_additions']
         return inducer_additions
 
 
@@ -102,9 +95,10 @@ class Cowfish(object):
         samples = []
         for filename in os.listdir(datadir):
             if filename.endswith(".fcs"):
-                filename = datadir + '/' + filename
+                filename = os.path.join(datadir, filename)
                 samples.append(FCMeasurement(ID=filename, datafile=filename))
-        return samples
+        # return softed by datafile
+        return sorted(samples, key=lambda x: x.datafile)
 
     # return pandas dataframe from FCMeasurement object
     # first_sample_time is to record the first sample time in the job
@@ -148,7 +142,7 @@ class Cowfish(object):
             elif only == "doublets":
                 yeast_app_gate = yeast_gate & haploid_doublet_gate
             else:
-                print "only needs to be singlets or doublets or None"
+                print("only needs to be singlets or doublets or None")
         elif ploidy == "diploid":
             if only == None:
                 yeast_app_gate = yeast_gate
@@ -157,7 +151,7 @@ class Cowfish(object):
             elif only == "doublets":
                 yeast_app_gate = yeast_gate & diploid_doublet_gate
             else:
-                print "only needs to be singlets or doublets or None"
+                print("only needs to be singlets or doublets or None")
         # fl1A_gate = ThresholdGate(1, 'FL1-A', region='above')
         return yeast_app_gate
 
@@ -177,11 +171,10 @@ class Cowfish(object):
         return new_samples
 
     def sample_ids(self, sample_names):
-        api = AquariumAPI(self.url, self.login, self.key)
         sample_ids = []
         for sample_name in sample_names:
-            sample = api.find('sample', { 'sample': {'name': sample_name} } )
-            sample_ids.append(sample['rows'][0]['id'])
+            sample = self.AqSession.Sample.find_by_name(sample_name)
+            sample_ids.append(sample.id)
         return sample_ids
 
     def short_names(self, sample_names):
